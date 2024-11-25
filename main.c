@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <wayland-client.h>
 #include <xkbcommon/xkbcommon.h>
+#include "aliases.h"
 #include "loop.h"
 
 struct state {
@@ -35,6 +36,17 @@ struct seat {
 
 static struct state state = { 0 };
 static char last_name[4096] = { 0 };
+
+static const char *
+get_short_name(const char *long_name)
+{
+	for (size_t i = 0; aliases[i].name_long; i++) {
+		if (!strcmp(aliases[i].name_long, long_name)) {
+			return aliases[i].name_short;
+		}
+	}
+	return long_name;
+}
 
 static void
 print_keyboard_layout(struct seat *seat)

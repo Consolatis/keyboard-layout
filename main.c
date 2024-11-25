@@ -13,6 +13,7 @@
 #include <xkbcommon/xkbcommon.h>
 #include "aliases.h"
 #include "loop.h"
+#include "cosmic-keymap-unstable-v1-client-protocol.h"
 
 struct state {
 	struct seat *seat;
@@ -20,6 +21,8 @@ struct state {
 	struct wl_display *display;
 	struct wl_compositor *compositor;
 	struct wl_shm *shm;
+	struct zcosmic_keymap_manager_v1 *cosmic_manager;
+	struct zcosmic_keymap_v1 *cosmic_keymap;
 	struct surface *surface;
 	struct loop *eventloop;
 };
@@ -51,6 +54,7 @@ get_short_name(const char *long_name)
 static void
 print_keyboard_layout(struct seat *seat)
 {
+	return;
 	if (!seat || !seat->xkb.keymap) {
 		return;
 	}
@@ -80,6 +84,32 @@ print_keyboard_layout(struct seat *seat)
 }
 
 static void
+handle_cosmic_group(void *data, struct zcosmic_keymap_v1 *zcosmic_keymap_v1,
+		uint32_t group)
+{
+	printf("cosmic layout changed to %u", group);
+
+	struct seat *seat = data;
+	if (!seat->xkb.keymap) {
+		printf("\n");
+		return;
+	}
+	const char *name = xkb_keymap_layout_get_name(seat->xkb.keymap, group);
+	printf(" (%s) [%s]\n", name, get_short_name(name));
+
+	if (group != 0) {
+		printf("changing back to 0. muhahaha\n");
+		//zcosmic_keymap_v1_set_group(zcosmic_keymap_v1, 0);
+	} else {
+		printf("\n");
+	}
+}
+
+const struct zcosmic_keymap_v1_listener cosmic_keymap_listener = {
+	.group = handle_cosmic_group,
+};
+
+static void
 handle_wl_keyboard_keymap(void *data, struct wl_keyboard *wl_keyboard,
 		uint32_t format, int32_t fd, uint32_t size)
 {
@@ -106,6 +136,13 @@ handle_wl_keyboard_keymap(void *data, struct wl_keyboard *wl_keyboard,
 	xkb_state_unref(seat->xkb.state);
 	seat->xkb.keymap = xkb_keymap;
 	seat->xkb.state = xkb_state;
+
+	if (seat->state->cosmic_manager && !seat->state->cosmic_keymap) {
+		seat->state->cosmic_keymap = zcosmic_keymap_manager_v1_get_keymap(
+			seat->state->cosmic_manager, wl_keyboard);
+		zcosmic_keymap_v1_add_listener(seat->state->cosmic_keymap,
+			&cosmic_keymap_listener, seat);
+	}
 }
 
 static void
@@ -135,6 +172,7 @@ handle_wl_keyboard_modifiers(void *data, struct wl_keyboard *wl_keyboard,
 		uint32_t serial, uint32_t mods_depressed, uint32_t mods_latched,
 		uint32_t mods_locked, uint32_t group)
 {
+	return;
 	struct seat *seat = data;
 	if (!seat->xkb.state) {
 		return;
@@ -210,6 +248,9 @@ handle_wl_registry_global(void *data, struct wl_registry *registry,
 		struct wl_seat *wl_seat = wl_registry_bind(registry, name,
 				&wl_seat_interface, 7);
 		seat_init(state, wl_seat);
+	} else if (!strcmp(interface, zcosmic_keymap_manager_v1_interface.name)) {
+		state->cosmic_manager = wl_registry_bind(registry, name,
+			&zcosmic_keymap_manager_v1_interface, 1);
 	}
 }
 
